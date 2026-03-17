@@ -2,7 +2,6 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
 const { WebSocketServer } = require('ws');
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
@@ -17,10 +16,7 @@ const connection = new WebcastPushConnection(tiktokUsername, {
     enableExtendedGiftInfo: true
 });
 
-const pythonProcess = spawn('python', ['play_voice.py']);
-const messageQueue = [];
 const likeTotals = new Map();
-let ttsAvailable = true;
 
 const overlayState = {
     chat: [],
@@ -117,39 +113,6 @@ const updateTopLikes = () => {
     broadcast({ type: 'likes', payload: overlayState.topLikes });
 };
 
-const sendToPython = (message) => {
-    if (!ttsAvailable) return;
-
-    try {
-        pythonProcess.stdin.write(`${message}\n`);
-    } catch (error) {
-        console.error(`Error al enviar mensaje a Python: ${error.message}`);
-        ttsAvailable = false;
-    }
-};
-
-const processQueue = () => {
-    if (messageQueue.length > 0) {
-        sendToPython(messageQueue.shift());
-        setTimeout(processQueue, 500);
-    } else {
-        setTimeout(processQueue, 1000);
-    }
-};
-processQueue();
-
-pythonProcess.on('error', (error) => {
-    ttsAvailable = false;
-    console.error(`TTS desactivado (no se pudo iniciar play_voice.py): ${error.message}`);
-});
-
-pythonProcess.on('exit', (code) => {
-    if (code !== 0) {
-        ttsAvailable = false;
-        console.error(`TTS desactivado (play_voice.py finalizo con codigo ${code})`);
-    }
-});
-
 wss.on('connection', (ws) => {
     ws.send(JSON.stringify({ type: 'init', payload: overlayState }));
 });
@@ -176,7 +139,14 @@ connection.on('chat', (data) => {
     const comment = cleanMessage(cleanMentions(data.comment));
     const spokenMessage = `${cleanUser}: ${comment}`;
 
-    messageQueue.push(spokenMessage);
+    broadcast({
+        type: 'tts',
+        payload: {
+            text: spokenMessage,
+            createdAt: Date.now()
+        }
+    });
+
     pushChatToOverlay({
         uniqueId: cleanUser || 'viewer',
         comment,

@@ -11,6 +11,10 @@ const tachLedsEl = document.getElementById('tachLeds');
 
 let giftTimer = null;
 let followerState = { start: 0, current: 0, target: 100 };
+const ttsQueue = [];
+let ttsVoice = null;
+let ttsReady = false;
+let ttsSpeaking = false;
 
 const LED_COUNT = 16;
 for (let i = 0; i < LED_COUNT; i += 1) {
@@ -24,6 +28,52 @@ for (let i = 0; i < LED_COUNT; i += 1) {
 const ledNodes = Array.from(tachLedsEl.children);
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const loadVoices = () => {
+    if (!('speechSynthesis' in window)) return;
+
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+
+    ttsVoice = voices.find((voice) => /es[-_]/i.test(voice.lang))
+        || voices.find((voice) => /spanish/i.test(voice.name))
+        || voices[0];
+
+    ttsReady = true;
+};
+
+const speakNext = () => {
+    if (!ttsReady || !ttsQueue.length || ttsSpeaking || !('speechSynthesis' in window)) return;
+
+    const text = ttsQueue.shift();
+    if (!text) return;
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (ttsVoice) utterance.voice = ttsVoice;
+    utterance.lang = ttsVoice?.lang || 'es-MX';
+    utterance.rate = 1.02;
+    utterance.pitch = 1;
+
+    ttsSpeaking = true;
+    utterance.onend = () => {
+        ttsSpeaking = false;
+        speakNext();
+    };
+    utterance.onerror = () => {
+        ttsSpeaking = false;
+        speakNext();
+    };
+
+    window.speechSynthesis.speak(utterance);
+};
+
+const enqueueTTS = (text) => {
+    if (!text || !('speechSynthesis' in window)) return;
+
+    ttsQueue.push(text);
+    if (ttsQueue.length > 30) ttsQueue.shift();
+    speakNext();
+};
 
 const renderChat = (messages = []) => {
     chatListEl.innerHTML = '';
@@ -165,10 +215,18 @@ ws.addEventListener('message', (event) => {
         setConnectionStatus(status.connected, status.connected ? `LIVE room ${status.roomId || ''}`.trim() : 'LIVE desconectado');
         break;
     }
+    case 'tts':
+        enqueueTTS(message.payload?.text || '');
+        break;
     default:
         break;
     }
 });
+
+if ('speechSynthesis' in window) {
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+}
 
 renderChat([]);
 renderLikes([]);
