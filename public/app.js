@@ -42,37 +42,85 @@ const loadVoices = () => {
     ttsReady = true;
 };
 
-const speakNext = () => {
-    if (!ttsReady || !ttsQueue.length || ttsSpeaking || !('speechSynthesis' in window)) return;
+const speakWithBrowserFallback = (text) => {
+    return new Promise((resolve) => {
+        if (!ttsReady || !text || !('speechSynthesis' in window)) {
+            resolve();
+            return;
+        }
 
-    const text = ttsQueue.shift();
-    if (!text) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (ttsVoice) utterance.voice = ttsVoice;
+        utterance.lang = ttsVoice?.lang || 'es-MX';
+        utterance.rate = 0.98;
+        utterance.pitch = 1;
+        utterance.onend = resolve;
+        utterance.onerror = resolve;
+        window.speechSynthesis.speak(utterance);
+    });
+};
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (ttsVoice) utterance.voice = ttsVoice;
-    utterance.lang = ttsVoice?.lang || 'es-MX';
-    utterance.rate = 1.02;
-    utterance.pitch = 1;
+const playAudioBlob = (blob) => {
+    return new Promise((resolve, reject) => {
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
 
+        audio.onended = () => {
+            URL.revokeObjectURL(audioUrl);
+            resolve();
+        };
+        audio.onerror = () => {
+            URL.revokeObjectURL(audioUrl);
+            reject(new Error('No se pudo reproducir audio TTS'));
+        };
+
+        audio.play().catch((error) => {
+            URL.revokeObjectURL(audioUrl);
+            reject(error);
+        });
+    });
+};
+
+const requestAzureTTS = async (text) => {
+    const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+    });
+
+    if (!response.ok) {
+        const details = await response.text();
+        throw new Error(`Azure TTS fallo: ${response.status} ${details.slice(0, 120)}`);
+    }
+
+    return response.blob();
+};
+
+const processTTSQueue = async () => {
+    if (ttsSpeaking || !ttsQueue.length) return;
     ttsSpeaking = true;
-    utterance.onend = () => {
-        ttsSpeaking = false;
-        speakNext();
-    };
-    utterance.onerror = () => {
-        ttsSpeaking = false;
-        speakNext();
-    };
 
-    window.speechSynthesis.speak(utterance);
+    while (ttsQueue.length) {
+        const text = ttsQueue.shift();
+        if (!text) continue;
+
+        try {
+            const audioBlob = await requestAzureTTS(text);
+            await playAudioBlob(audioBlob);
+        } catch (error) {
+            console.warn(error.message);
+            await speakWithBrowserFallback(text);
+        }
+    }
+
+    ttsSpeaking = false;
 };
 
 const enqueueTTS = (text) => {
-    if (!text || !('speechSynthesis' in window)) return;
-
+    if (!text) return;
     ttsQueue.push(text);
     if (ttsQueue.length > 30) ttsQueue.shift();
-    speakNext();
+    processTTSQueue();
 };
 
 const renderChat = (messages = []) => {

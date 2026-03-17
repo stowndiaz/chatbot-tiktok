@@ -11,6 +11,9 @@ const overlayHost = process.env.OVERLAY_HOST || '0.0.0.0';
 const followerGoalStart = Number(process.env.FOLLOWER_GOAL_START || 0);
 const followerGoalTarget = Number(process.env.FOLLOWER_GOAL_TARGET || 100);
 const publicDir = path.join(__dirname, 'public');
+const speechKey = process.env.SPEECH_KEY || process.env.AZURE_SPEECH_KEY || '';
+const speechRegion = process.env.SPEECH_REGION || process.env.AZURE_SPEECH_REGION || '';
+const speechVoice = process.env.SPEECH_VOICE || 'es-MX-DaliaNeural';
 
 const connection = new WebcastPushConnection(tiktokUsername, {
     enableExtendedGiftInfo: true
@@ -44,11 +47,70 @@ const cleanMentions = (comment = '') => {
 const cleanMessage = (message = '') => {
     return message
         .normalize('NFKD')
-        .replace(/[^\x00-\x7F]+/g, '')
-        .replace(/([a-zA-Z])\1{2,}/g, '$1$1')
-        .replace(/[^a-zA-Z0-9 @]+/g, ' ')
+        .replace(/([\p{L}])\1{2,}/gu, '$1$1')
+        .replace(/[^\p{L}\p{N}\s@.,!?¿¡:;'"\-]/gu, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+};
+
+const parseJsonBody = (req) => {
+    return new Promise((resolve, reject) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+            raw += chunk;
+            if (raw.length > 50_000) {
+                reject(new Error('Payload demasiado grande'));
+            }
+        });
+        req.on('end', () => {
+            if (!raw) {
+                resolve({});
+                return;
+            }
+            try {
+                resolve(JSON.parse(raw));
+            } catch {
+                reject(new Error('JSON invalido'));
+            }
+        });
+        req.on('error', reject);
+    });
+};
+
+const escapeXml = (value = '') => {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+};
+
+const synthesizeAzureTTS = async (text) => {
+    if (!speechKey || !speechRegion) {
+        throw new Error('Azure TTS no configurado');
+    }
+
+    const endpoint = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
+    const ssml = `<speak version='1.0' xml:lang='es-MX'><voice name='${speechVoice}'><prosody rate='0%' pitch='0%'>${escapeXml(text)}</prosody></voice></speak>`;
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/ssml+xml',
+            'Ocp-Apim-Subscription-Key': speechKey,
+            'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+            'User-Agent': 'tiktok-overlay-telemetry'
+        },
+        body: ssml
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Azure TTS error ${response.status}: ${errorText.slice(0, 240)}`);
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    return Buffer.from(audioBuffer);
 };
 
 const mimeTypes = {
@@ -59,7 +121,35 @@ const mimeTypes = {
     '.svg': 'image/svg+xml; charset=utf-8'
 };
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
+    if (req.method === 'POST' && req.url === '/api/tts') {
+        try {
+            const body = await parseJsonBody(req);
+            const rawText = typeof body.text === 'string' ? body.text : '';
+            const text = cleanMessage(rawText).slice(0, 280);
+
+            if (!text) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ error: 'Texto vacio' }));
+                return;
+            }
+
+            const audio = await synthesizeAzureTTS(text);
+            res.writeHead(200, {
+                'Cache-Control': 'no-store',
+                'Content-Type': 'audio/mpeg',
+                'Content-Length': audio.length
+            });
+            res.end(audio);
+            return;
+        } catch (error) {
+            const status = String(error.message || '').includes('no configurado') ? 503 : 500;
+            res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+            res.end(JSON.stringify({ error: error.message || 'No se pudo generar TTS' }));
+            return;
+        }
+    }
+
     const reqPath = req.url === '/' ? '/index.html' : req.url;
     const safePath = path.normalize(reqPath).replace(/^(\.\.[\\/])+/, '');
     const fullPath = path.join(publicDir, safePath);
