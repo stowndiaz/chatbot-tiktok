@@ -96,6 +96,8 @@ const requestAzureTTS = async (text) => {
     return response.blob();
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const processTTSQueue = async () => {
     if (ttsSpeaking || !ttsQueue.length) return;
     ttsSpeaking = true;
@@ -108,8 +110,15 @@ const processTTSQueue = async () => {
             const audioBlob = await requestAzureTTS(text);
             await playAudioBlob(audioBlob);
         } catch (error) {
-            console.warn(error.message);
-            await speakWithBrowserFallback(text);
+            console.warn(`Azure TTS intento 1 fallo: ${error.message}`);
+            try {
+                await sleep(220);
+                const retryAudioBlob = await requestAzureTTS(text);
+                await playAudioBlob(retryAudioBlob);
+            } catch (retryError) {
+                console.warn(`Azure TTS intento 2 fallo, usando fallback: ${retryError.message}`);
+                await speakWithBrowserFallback(text);
+            }
         }
     }
 

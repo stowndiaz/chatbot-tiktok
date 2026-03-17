@@ -46,7 +46,6 @@ const cleanMentions = (comment = '') => {
 
 const cleanMessage = (message = '') => {
     return message
-        .normalize('NFKD')
         .replace(/([\p{L}])\1{2,}/gu, '$1$1')
         .replace(/[^\p{L}\p{N}\s@.,!?¿¡:;'"\-]/gu, ' ')
         .replace(/\s+/g, ' ')
@@ -92,13 +91,13 @@ const synthesizeAzureTTS = async (text) => {
     }
 
     const endpoint = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
-    const ssml = `<speak version='1.0' xml:lang='es-MX'><voice name='${speechVoice}'><prosody rate='0%' pitch='0%'>${escapeXml(text)}</prosody></voice></speak>`;
+    const ssml = `<speak version='1.0' xml:lang='es-MX'><voice name='${speechVoice}'><prosody rate='-4%' pitch='0%'>${escapeXml(text)}</prosody></voice></speak>`;
     const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/ssml+xml',
             'Ocp-Apim-Subscription-Key': speechKey,
-            'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+            'X-Microsoft-OutputFormat': 'audio-48khz-192kbitrate-mono-mp3',
             'User-Agent': 'tiktok-overlay-telemetry'
         },
         body: ssml
@@ -143,6 +142,7 @@ const server = http.createServer(async (req, res) => {
             res.end(audio);
             return;
         } catch (error) {
+            console.error(`TTS API error: ${error.message}`);
             const status = String(error.message || '').includes('no configurado') ? 503 : 500;
             res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
             res.end(JSON.stringify({ error: error.message || 'No se pudo generar TTS' }));
