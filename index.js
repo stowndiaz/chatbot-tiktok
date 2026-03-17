@@ -5,7 +5,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
-const tiktokUsername = process.env.TIKTOK_USERNAME || 'zr_amarillas';
+const tiktokUsername = process.env.TIKTOK_USERNAME || 'multi_twentyone';
 const overlayPort = Number(process.env.PORT || process.env.OVERLAY_PORT || 3000);
 const overlayHost = process.env.OVERLAY_HOST || '0.0.0.0';
 const followerGoalStart = Number(process.env.FOLLOWER_GOAL_START || 0);
