@@ -1,0 +1,322 @@
+:root {
+    --bg: transparent;
+    --panel: rgba(11, 16, 19, 0.52);
+    --panel-border: rgba(164, 187, 198, 0.24);
+    --panel-glow: rgba(116, 255, 177, 0.22);
+    --text-main: #eaf9f5;
+    --text-dim: #8fa6ad;
+    --accent: #74ffb1;
+    --accent-warn: #ffe56f;
+    --accent-hot: #ff6464;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: "Datatype", "Rajdhani", sans-serif;
+}
+
+.material-symbols-rounded {
+    font-size: 19px;
+    line-height: 1;
+}
+
+.overlay {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+.panel {
+    border: 1px solid var(--panel-border);
+    background: linear-gradient(140deg, rgba(22, 29, 34, 0.72), var(--panel));
+    backdrop-filter: blur(7px);
+    border-radius: 14px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 26px var(--panel-glow);
+}
+
+.panel-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.panel-chat {
+    position: absolute;
+    left: 18px;
+    top: 18px;
+    width: min(34vw, 450px);
+    padding: 12px;
+}
+
+.chat-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 7px;
+}
+
+.chat-list li {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 8px;
+    font-size: 16px;
+    line-height: 1.2;
+}
+
+.chat-user {
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-message {
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.panel-likes {
+    position: absolute;
+    right: 18px;
+    top: 18px;
+    width: min(24vw, 320px);
+    padding: 12px;
+}
+
+.likes-list {
+    margin: 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+}
+
+.likes-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.likes-user {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-main);
+}
+
+.likes-count {
+    color: var(--accent-warn);
+}
+
+.panel-followers {
+    position: absolute;
+    right: 18px;
+    bottom: 18px;
+    width: min(30vw, 380px);
+    padding: 12px;
+}
+
+.tach-wrap {
+    position: relative;
+    margin-top: 2px;
+}
+
+.tach-arc {
+    position: relative;
+    width: 100%;
+    height: 130px;
+    border-radius: 130px 130px 0 0;
+    border: 2px solid rgba(255, 255, 255, 0.11);
+    border-bottom: none;
+    background:
+        radial-gradient(85% 100% at 50% 100%, rgba(102, 255, 169, 0.2), rgba(102, 255, 169, 0) 65%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0));
+    overflow: hidden;
+}
+
+.tach-needle {
+    position: absolute;
+    left: calc(50% - 2px);
+    bottom: -10px;
+    width: 4px;
+    height: 120px;
+    background: linear-gradient(to top, #fff 10%, var(--accent-hot));
+    transform-origin: bottom center;
+    transform: rotate(-110deg);
+    box-shadow: 0 0 10px rgba(255, 100, 100, 0.6);
+}
+
+.tach-leds {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: 8px;
+    display: grid;
+    grid-template-columns: repeat(16, 1fr);
+    gap: 4px;
+}
+
+.tach-led {
+    height: 10px;
+    border-radius: 3px;
+    background: rgba(137, 157, 165, 0.24);
+    transition: background 180ms ease, box-shadow 180ms ease;
+}
+
+.tach-led.active {
+    background: var(--accent);
+    box-shadow: 0 0 9px rgba(116, 255, 177, 0.65);
+}
+
+.tach-led.warn.active {
+    background: var(--accent-warn);
+    box-shadow: 0 0 10px rgba(255, 229, 111, 0.6);
+}
+
+.tach-led.hot.active {
+    background: var(--accent-hot);
+    box-shadow: 0 0 11px rgba(255, 100, 100, 0.66);
+}
+
+.goal-numbers {
+    margin-top: 10px;
+    text-align: right;
+    font-size: 28px;
+    letter-spacing: 0.06em;
+}
+
+.goal-numbers .sep {
+    color: var(--text-dim);
+    margin: 0 6px;
+}
+
+.gift-toast {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    top: 22px;
+    min-width: 320px;
+    max-width: min(70vw, 760px);
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 229, 111, 0.35);
+    background: linear-gradient(130deg, rgba(23, 20, 10, 0.82), rgba(10, 13, 16, 0.78));
+    box-shadow: 0 0 28px rgba(255, 229, 111, 0.36);
+}
+
+.gift-icon {
+    color: var(--accent-warn);
+}
+
+.gift-title {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+}
+
+#giftMessage {
+    font-size: 19px;
+    color: #fff7cc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.panel-status {
+    position: absolute;
+    left: 18px;
+    bottom: 18px;
+    padding: 8px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-dim);
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent-hot);
+    box-shadow: 0 0 8px rgba(255, 100, 100, 0.6);
+}
+
+.status-dot.live {
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(116, 255, 177, 0.7);
+}
+
+@media (orientation: portrait) {
+    .panel-chat,
+    .panel-likes,
+    .panel-followers,
+    .panel-status {
+        position: static;
+        width: auto;
+        margin: 0;
+    }
+
+    .gift-toast {
+        top: 20px;
+        max-width: 92vw;
+        min-width: 0;
+    }
+
+    .overlay {
+        display: grid;
+        align-content: end;
+        gap: 10px;
+        padding: 0 10px 10px;
+        min-height: 100vh;
+    }
+
+    .overlay::before {
+        content: "";
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 350px;
+        pointer-events: none;
+        background: linear-gradient(to top, rgba(6, 9, 12, 0.55), rgba(6, 9, 12, 0));
+    }
+
+    .panel-chat .chat-list li {
+        grid-template-columns: 88px 1fr;
+        font-size: 15px;
+    }
+
+    .panel-followers .goal-numbers {
+        font-size: 24px;
+    }
+}

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Telemetry Overlay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Datatype:wght@400;500;700&family=Rajdhani:wght@500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,600,1,0" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <main class="overlay">
+        <section class="panel panel-chat">
+            <header class="panel-title">
+                <span class="material-symbols-rounded">chat</span>
+                <span>Live Chat</span>
+            </header>
+            <ul id="chatList" class="chat-list"></ul>
+        </section>
+
+        <section class="panel panel-likes">
+            <header class="panel-title">
+                <span class="material-symbols-rounded">favorite</span>
+                <span>Top Likes</span>
+            </header>
+            <ol id="likesList" class="likes-list"></ol>
+        </section>
+
+        <section class="panel panel-followers">
+            <header class="panel-title">
+                <span class="material-symbols-rounded">speed</span>
+                <span>Followers Goal</span>
+            </header>
+            <div class="tach-wrap">
+                <div class="tach-arc">
+                    <div id="tachNeedle" class="tach-needle"></div>
+                </div>
+                <div id="tachLeds" class="tach-leds"></div>
+            </div>
+            <div class="goal-numbers">
+                <span id="followersCurrent">0</span>
+                <span class="sep">/</span>
+                <span id="followersTarget">100</span>
+            </div>
+        </section>
+
+        <section id="giftToast" class="gift-toast hidden">
+            <div class="gift-icon material-symbols-rounded">redeem</div>
+            <div class="gift-text">
+                <div class="gift-title">Nuevo regalo</div>
+                <div id="giftMessage"></div>
+            </div>
+        </section>
+
+        <section class="panel panel-status">
+            <span id="connectionDot" class="status-dot"></span>
+            <span id="connectionText">Esperando conexión...</span>
+        </section>
+    </main>
+    <script src="/app.js"></script>
+</body>
+</html>

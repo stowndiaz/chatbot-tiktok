@@ -1,0 +1,17 @@
+{
+  "name": "tiktok-chat-reader",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "tiktok-live-connector": "^1.2.3",
+    "ws": "^8.18.0"
+  }
+}
