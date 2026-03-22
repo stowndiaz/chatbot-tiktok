@@ -5,6 +5,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { WebcastPushConnection } = require('tiktok-live-connector');
 
+const source = (process.env.SOURCE || 'tiktok').toLowerCase();
 const tiktokUsername = process.env.TIKTOK_USERNAME || 'multi_twentyone';
 const overlayPort = Number(process.env.PORT || process.env.OVERLAY_PORT || 3000);
 const overlayHost = process.env.OVERLAY_HOST || '0.0.0.0';
@@ -14,10 +15,12 @@ const publicDir = path.join(__dirname, 'public');
 const speechKey = process.env.SPEECH_KEY || process.env.AZURE_SPEECH_KEY || '';
 const speechRegion = process.env.SPEECH_REGION || process.env.AZURE_SPEECH_REGION || '';
 const speechVoice = process.env.SPEECH_VOICE || 'es-MX-DaliaNeural';
-
-const connection = new WebcastPushConnection(tiktokUsername, {
-    enableExtendedGiftInfo: true
-});
+const youtubeApiKey = process.env.YOUTUBE_API_KEY || '';
+const youtubeLiveUrl = process.env.YOUTUBE_LIVE_URL || '';
+const youtubeLiveVideoId = process.env.YOUTUBE_LIVE_VIDEO_ID || '';
+const youtubeChannelId = process.env.YOUTUBE_CHANNEL_ID || '';
+const youtubeChannelHandle = process.env.YOUTUBE_CHANNEL_HANDLE || '';
+const youtubePollMinMs = Number(process.env.YOUTUBE_POLL_MIN_MS || 1500);
 
 const likeTotals = new Map();
 
@@ -98,7 +101,7 @@ const synthesizeAzureTTS = async (text) => {
             'Content-Type': 'application/ssml+xml',
             'Ocp-Apim-Subscription-Key': speechKey,
             'X-Microsoft-OutputFormat': 'audio-48khz-192kbitrate-mono-mp3',
-            'User-Agent': 'tiktok-overlay-telemetry'
+            'User-Agent': 'live-overlay-telemetry'
         },
         body: ssml
     });
@@ -203,31 +206,20 @@ const updateTopLikes = () => {
     broadcast({ type: 'likes', payload: overlayState.topLikes });
 };
 
-wss.on('connection', (ws) => {
-    ws.send(JSON.stringify({ type: 'init', payload: overlayState }));
-});
-
-connection.on('connected', (state) => {
+const setLiveStatus = (connected, roomId) => {
     overlayState.liveStatus = {
-        connected: true,
-        roomId: state.roomId || null
+        connected: Boolean(connected),
+        roomId: roomId || null
     };
-
     broadcast({ type: 'liveStatus', payload: overlayState.liveStatus });
-    console.log(`Conectado a @${tiktokUsername} (roomId: ${state.roomId})`);
-});
+};
 
-connection.on('disconnected', () => {
-    overlayState.liveStatus.connected = false;
-    broadcast({ type: 'liveStatus', payload: overlayState.liveStatus });
-});
+const handleChatEvent = (username, comment) => {
+    const cleanUser = cleanUsername(username || 'viewer') || 'viewer';
+    const cleanComment = cleanMessage(cleanMentions(comment || ''));
+    if (!cleanComment) return;
 
-connection.on('chat', (data) => {
-    if (!data.uniqueId || !data.comment) return;
-
-    const cleanUser = cleanUsername(data.uniqueId);
-    const comment = cleanMessage(cleanMentions(data.comment));
-    const spokenMessage = `${cleanUser}: ${comment}`;
+    const spokenMessage = `${cleanUser}: ${cleanComment}`;
 
     broadcast({
         type: 'tts',
@@ -238,51 +230,271 @@ connection.on('chat', (data) => {
     });
 
     pushChatToOverlay({
-        uniqueId: cleanUser || 'viewer',
-        comment,
+        uniqueId: cleanUser,
+        comment: cleanComment,
         createdAt: Date.now()
     });
-});
+};
 
-connection.on('gift', (data) => {
-    const fallbackGift = `Gift ${data.giftId || ''}`.trim();
-    const giftName = data.giftName || data.extendedGiftInfo?.name || fallbackGift;
-
+const handleGiftEvent = (username, giftName, repeatCount = 1) => {
     overlayState.lastGift = {
-        uniqueId: cleanUsername(data.uniqueId || 'viewer'),
-        giftName,
-        repeatCount: Number(data.repeatCount || 1),
+        uniqueId: cleanUsername(username || 'viewer') || 'viewer',
+        giftName: cleanMessage(giftName || 'Gift'),
+        repeatCount: Number(repeatCount || 1),
         createdAt: Date.now()
     };
 
     broadcast({ type: 'gift', payload: overlayState.lastGift });
-});
+};
 
-connection.on('like', (data) => {
-    const user = cleanUsername(data.uniqueId || 'viewer') || 'viewer';
-    const likeCount = Number(data.likeCount || 0);
-
-    likeTotals.set(user, (likeTotals.get(user) || 0) + (likeCount > 0 ? likeCount : 1));
+const handleLikeEvent = (username, likeCount) => {
+    const user = cleanUsername(username || 'viewer') || 'viewer';
+    const count = Number(likeCount || 0);
+    likeTotals.set(user, (likeTotals.get(user) || 0) + (count > 0 ? count : 1));
     updateTopLikes();
-});
+};
 
-connection.on('follow', (data) => {
+const handleFollowEvent = (username) => {
     overlayState.followerGoal.current += 1;
     broadcast({ type: 'followGoal', payload: overlayState.followerGoal });
-    console.log(`Nuevo follow: ${cleanUsername(data.uniqueId || 'viewer')}`);
+    console.log(`Nuevo follow: ${cleanUsername(username || 'viewer')}`);
+};
+
+wss.on('connection', (ws) => {
+    ws.send(JSON.stringify({ type: 'init', payload: overlayState }));
 });
 
-connection.on('error', (err) => {
-    console.error('Error de TikTok:', err.info?.message || err.message || err);
-});
+const startTikTokSource = async () => {
+    const connection = new WebcastPushConnection(tiktokUsername, {
+        enableExtendedGiftInfo: true
+    });
 
-const reconnectTikTok = async () => {
+    connection.on('connected', (state) => {
+        setLiveStatus(true, state.roomId || null);
+        console.log(`Conectado a TikTok @${tiktokUsername} (roomId: ${state.roomId})`);
+    });
+
+    connection.on('disconnected', () => {
+        setLiveStatus(false, overlayState.liveStatus.roomId);
+    });
+
+    connection.on('chat', (data) => {
+        if (!data.uniqueId || !data.comment) return;
+        handleChatEvent(data.uniqueId, data.comment);
+    });
+
+    connection.on('gift', (data) => {
+        const fallbackGift = `Gift ${data.giftId || ''}`.trim();
+        const giftName = data.giftName || data.extendedGiftInfo?.name || fallbackGift;
+        handleGiftEvent(data.uniqueId, giftName, Number(data.repeatCount || 1));
+    });
+
+    connection.on('like', (data) => {
+        handleLikeEvent(data.uniqueId, data.likeCount);
+    });
+
+    connection.on('follow', (data) => {
+        handleFollowEvent(data.uniqueId);
+    });
+
+    connection.on('error', (err) => {
+        console.error('Error de TikTok:', err.info?.message || err.message || err);
+    });
+
+    const reconnectTikTok = async () => {
+        try {
+            await connection.connect();
+        } catch (err) {
+            console.error('No se pudo conectar a TikTok. Reintentando en 5s...', err.message || err);
+            setTimeout(reconnectTikTok, 5000);
+        }
+    };
+
+    reconnectTikTok();
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const parseYouTubeVideoIdFromUrl = (urlValue) => {
+    if (!urlValue) return '';
+
     try {
-        await connection.connect();
-    } catch (err) {
-        console.error('No se pudo conectar a TikTok. Reintentando en 5s...', err.message || err);
-        setTimeout(reconnectTikTok, 5000);
+        const url = new URL(urlValue);
+
+        if (url.hostname.includes('youtu.be')) {
+            return url.pathname.replace(/^\//, '').trim();
+        }
+
+        if (url.searchParams.get('v')) {
+            return url.searchParams.get('v').trim();
+        }
+
+        const parts = url.pathname.split('/').filter(Boolean);
+        const liveIndex = parts.findIndex((part) => part === 'live');
+        if (liveIndex >= 0 && parts[liveIndex + 1]) {
+            return parts[liveIndex + 1].trim();
+        }
+    } catch {
+        return '';
     }
+
+    return '';
+};
+
+const youtubeFetchJson = async (pathname, params = {}) => {
+    const searchParams = new URLSearchParams({ ...params, key: youtubeApiKey });
+    const url = `https://www.googleapis.com/youtube/v3/${pathname}?${searchParams.toString()}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`YouTube API ${pathname} ${response.status}: ${text.slice(0, 240)}`);
+    }
+
+    return response.json();
+};
+
+const findLiveVideoIdForChannel = async () => {
+    let channelId = youtubeChannelId;
+    if (!channelId && youtubeChannelHandle) {
+        const payload = await youtubeFetchJson('search', {
+            part: 'snippet',
+            q: youtubeChannelHandle,
+            type: 'channel',
+            maxResults: '5'
+        });
+
+        const normalizedHandle = youtubeChannelHandle.trim().replace(/^@/, '').toLowerCase();
+        const exactHandleMatch = (payload.items || []).find((item) => {
+            const customUrl = item?.snippet?.customUrl || '';
+            return customUrl.replace(/^@/, '').toLowerCase() === normalizedHandle;
+        });
+
+        channelId = exactHandleMatch?.snippet?.channelId || payload.items?.[0]?.snippet?.channelId || '';
+    }
+
+    if (!channelId) return '';
+
+    const payload = await youtubeFetchJson('search', {
+        part: 'id',
+        channelId,
+        eventType: 'live',
+        type: 'video',
+        maxResults: '1'
+    });
+
+    return payload.items?.[0]?.id?.videoId || '';
+};
+
+const getActiveLiveChatId = async (videoId) => {
+    const payload = await youtubeFetchJson('videos', {
+        part: 'liveStreamingDetails,snippet',
+        id: videoId
+    });
+
+    const item = payload.items?.[0];
+    return {
+        title: item?.snippet?.title || '',
+        activeLiveChatId: item?.liveStreamingDetails?.activeLiveChatId || ''
+    };
+};
+
+const superChatLabel = (amountText, currency) => {
+    const amount = cleanMessage(amountText || '').trim();
+    if (amount) return `SuperChat ${amount}`;
+    if (currency) return `SuperChat ${currency}`;
+    return 'SuperChat';
+};
+
+const startYouTubeSource = async () => {
+    if (!youtubeApiKey) {
+        throw new Error('Falta YOUTUBE_API_KEY para SOURCE=youtube');
+    }
+
+    let videoId = youtubeLiveVideoId || parseYouTubeVideoIdFromUrl(youtubeLiveUrl);
+    let liveChatId = '';
+    let pageToken = '';
+
+    const ensureLiveChat = async () => {
+        if (!videoId) {
+            videoId = await findLiveVideoIdForChannel();
+        }
+
+        if (!videoId) {
+            throw new Error('No se encontro video LIVE de YouTube. Define YOUTUBE_LIVE_VIDEO_ID o YOUTUBE_CHANNEL_ID.');
+        }
+
+        const liveDetails = await getActiveLiveChatId(videoId);
+        if (!liveDetails.activeLiveChatId) {
+            throw new Error(`El video ${videoId} no tiene chat en vivo activo todavia.`);
+        }
+
+        liveChatId = liveDetails.activeLiveChatId;
+        setLiveStatus(true, `yt:${videoId}`);
+        console.log(`Conectado a YouTube LIVE videoId=${videoId} ${liveDetails.title ? `(${liveDetails.title})` : ''}`.trim());
+    };
+
+    const pollLoop = async () => {
+        while (true) {
+            try {
+                if (!liveChatId) {
+                    await ensureLiveChat();
+                }
+
+                const payload = await youtubeFetchJson('liveChatMessages', {
+                    part: 'snippet,authorDetails',
+                    liveChatId,
+                    pageToken,
+                    maxResults: '200'
+                });
+
+                pageToken = payload.nextPageToken || pageToken;
+
+                for (const item of payload.items || []) {
+                    const type = item?.snippet?.type;
+                    const username = item?.authorDetails?.displayName || 'viewer';
+
+                    if (type === 'textMessageEvent') {
+                        const text = item?.snippet?.displayMessage || '';
+                        handleChatEvent(username, text);
+                        continue;
+                    }
+
+                    if (type === 'superChatEvent') {
+                        const amountText = item?.snippet?.superChatDetails?.amountDisplayString || '';
+                        const currency = item?.snippet?.superChatDetails?.currency || '';
+                        handleGiftEvent(username, superChatLabel(amountText, currency), 1);
+                        continue;
+                    }
+
+                    if (type === 'superStickerEvent') {
+                        const amountText = item?.snippet?.superStickerDetails?.amountDisplayString || '';
+                        handleGiftEvent(username, `SuperSticker ${amountText}`.trim(), 1);
+                        continue;
+                    }
+
+                    if (type === 'newSponsorEvent') {
+                        handleGiftEvent(username, 'Nueva membresia', 1);
+                    }
+                }
+
+                const apiMs = Number(payload.pollingIntervalMillis || 2000);
+                await sleep(Math.max(youtubePollMinMs, apiMs));
+            } catch (error) {
+                console.error(`YouTube polling error: ${error.message}`);
+                setLiveStatus(false, videoId ? `yt:${videoId}` : null);
+                await sleep(4000);
+
+                if (!youtubeLiveVideoId && !youtubeLiveUrl) {
+                    videoId = '';
+                }
+                liveChatId = '';
+                pageToken = '';
+            }
+        }
+    };
+
+    pollLoop();
 };
 
 server.listen(overlayPort, overlayHost, () => {
@@ -294,6 +506,15 @@ server.listen(overlayPort, overlayHost, () => {
     if (localIpv4) {
         console.log(`Overlay LAN: http://${localIpv4}:${overlayPort}`);
     }
+    console.log(`Fuente activa: ${source}`);
 });
 
-reconnectTikTok();
+if (source === 'youtube') {
+    startYouTubeSource().catch((error) => {
+        console.error(`No se pudo iniciar YouTube source: ${error.message}`);
+    });
+} else {
+    startTikTokSource().catch((error) => {
+        console.error(`No se pudo iniciar TikTok source: ${error.message}`);
+    });
+}
