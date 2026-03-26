@@ -5,10 +5,12 @@ const ttsQueue = [];
 let ttsVoice = null;
 let ttsReady = false;
 let ttsSpeaking = false;
+let lastTopChatKey = '';
 
 const MAX_HEARTS_ON_SCREEN = 140;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const getChatKey = (item = {}) => `${item.uniqueId || ''}|${item.comment || ''}|${item.createdAt || ''}`;
 
 const loadVoices = () => {
     if (!('speechSynthesis' in window)) return;
@@ -114,10 +116,20 @@ const enqueueTTS = (text) => {
 };
 
 const renderChat = (messages = []) => {
+    const topMessage = messages[0] || null;
+    const topKey = topMessage ? getChatKey(topMessage) : '';
+    const isNewTopMessage = Boolean(topKey && topKey !== lastTopChatKey);
+    lastTopChatKey = topKey;
+
     chatListEl.innerHTML = '';
 
-    messages.forEach((item) => {
+    messages.forEach((item, index) => {
         const li = document.createElement('li');
+        if (index === 0 && isNewTopMessage) {
+            li.classList.add('chat-new');
+        } else if (index > 0) {
+            li.classList.add('chat-shift');
+        }
 
         const user = document.createElement('span');
         user.className = 'chat-user';
