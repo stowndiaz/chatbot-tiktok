@@ -1,31 +1,12 @@
 const chatListEl = document.getElementById('chatList');
-const likesListEl = document.getElementById('likesList');
-const followersCurrentEl = document.getElementById('followersCurrent');
-const followersTargetEl = document.getElementById('followersTarget');
-const giftToastEl = document.getElementById('giftToast');
-const giftMessageEl = document.getElementById('giftMessage');
-const connectionDotEl = document.getElementById('connectionDot');
-const connectionTextEl = document.getElementById('connectionText');
-const tachNeedleEl = document.getElementById('tachNeedle');
-const tachLedsEl = document.getElementById('tachLeds');
+const heartsLayerEl = document.getElementById('heartsLayer');
 
-let giftTimer = null;
-let followerState = { start: 0, current: 0, target: 100 };
 const ttsQueue = [];
 let ttsVoice = null;
 let ttsReady = false;
 let ttsSpeaking = false;
 
-const LED_COUNT = 16;
-for (let i = 0; i < LED_COUNT; i += 1) {
-    const led = document.createElement('div');
-    led.className = 'tach-led';
-    if (i >= 11 && i <= 13) led.classList.add('warn');
-    if (i >= 14) led.classList.add('hot');
-    tachLedsEl.appendChild(led);
-}
-
-const ledNodes = Array.from(tachLedsEl.children);
+const MAX_HEARTS_ON_SCREEN = 140;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -151,7 +132,7 @@ const renderChat = (messages = []) => {
         chatListEl.appendChild(li);
     });
 
-    while (chatListEl.children.length < 4) {
+    while (chatListEl.children.length < 12) {
         const li = document.createElement('li');
         const user = document.createElement('span');
         user.className = 'chat-user';
@@ -165,83 +146,69 @@ const renderChat = (messages = []) => {
     }
 };
 
-const renderLikes = (topLikes = []) => {
-    likesListEl.innerHTML = '';
+const trimHeartNodes = () => {
+    const hearts = heartsLayerEl.querySelectorAll('.heart-burst');
+    if (hearts.length <= MAX_HEARTS_ON_SCREEN) return;
 
-    for (let i = 0; i < 5; i += 1) {
-        const rowData = topLikes[i];
-        const li = document.createElement('li');
-        li.className = 'likes-row';
-
-        const user = document.createElement('span');
-        user.className = 'likes-user';
-        user.textContent = rowData ? rowData.uniqueId : `slot ${i + 1}`;
-
-        const count = document.createElement('span');
-        count.className = 'likes-count';
-        count.textContent = rowData ? rowData.likes : '--';
-
-        li.appendChild(user);
-        li.appendChild(count);
-        likesListEl.appendChild(li);
+    const extra = hearts.length - MAX_HEARTS_ON_SCREEN;
+    for (let i = 0; i < extra; i += 1) {
+        hearts[i].remove();
     }
 };
 
-const renderFollowers = (goal) => {
-    followerState = goal;
-    followersCurrentEl.textContent = String(goal.current);
-    followersTargetEl.textContent = String(goal.target);
+const spawnLikeHearts = (burst = {}) => {
+    const source = burst.source === 'youtube' ? 'youtube' : 'tiktok';
+    const total = clamp(Number(burst.count || 1), 1, 80);
+    const travelMin = source === 'youtube' ? 700 : 540;
+    const travelMax = source === 'youtube' ? 1020 : 800;
+    const heartSize = source === 'youtube' ? 120 : 76;
+    const durationMin = source === 'youtube' ? 2400 : 1700;
+    const durationMax = source === 'youtube' ? 3400 : 2500;
+    const lane = source === 'youtube' ? 0.35 : 0.68;
 
-    const totalRange = Math.max(goal.target - goal.start, 1);
-    const progress = clamp((goal.current - goal.start) / totalRange, 0, 1);
-    const activeLeds = Math.round(progress * LED_COUNT);
-    const needleRotation = -110 + (220 * progress);
+    for (let i = 0; i < total; i += 1) {
+        const heart = document.createElement('span');
+        heart.className = `heart-burst ${source}`;
 
-    tachNeedleEl.style.transform = `rotate(${needleRotation}deg)`;
-    ledNodes.forEach((led, index) => {
-        led.classList.toggle('active', index < activeLeds);
-    });
-};
+        const drift = (Math.random() - 0.5) * 260;
+        const spread = (Math.random() - 0.5) * 160;
+        const x = `${(lane * 100) + spread / 10}%`;
+        const travel = Math.round(travelMin + (Math.random() * (travelMax - travelMin)));
+        const duration = Math.round(durationMin + (Math.random() * (durationMax - durationMin)));
+        const delay = i * (source === 'youtube' ? 55 : 40);
 
-const showGift = (gift) => {
-    const count = gift.repeatCount > 1 ? ` x${gift.repeatCount}` : '';
-    giftMessageEl.textContent = `${gift.uniqueId} envio ${gift.giftName}${count}`;
-    giftToastEl.classList.remove('hidden');
+        heart.style.left = x;
+        heart.style.fontSize = `${Math.round(heartSize + ((Math.random() - 0.5) * 16))}px`;
+        heart.style.setProperty('--travel', `${travel}px`);
+        heart.style.setProperty('--drift', `${drift}px`);
+        heart.style.animationDuration = `${duration}ms`;
+        heart.style.animationDelay = `${delay}ms`;
 
-    if (giftTimer) clearTimeout(giftTimer);
-    giftTimer = setTimeout(() => {
-        giftToastEl.classList.add('hidden');
-    }, 4200);
-};
+        if (i === 0 && burst.avatarUrl) {
+            const avatar = document.createElement('img');
+            avatar.className = 'heart-avatar';
+            avatar.src = burst.avatarUrl;
+            avatar.alt = burst.uniqueId || source;
+            avatar.loading = 'lazy';
+            heart.appendChild(avatar);
+        }
 
-const setConnectionStatus = (isLive, text) => {
-    connectionDotEl.classList.toggle('live', Boolean(isLive));
-    connectionTextEl.textContent = text;
+        heart.addEventListener('animationend', () => {
+            heart.remove();
+        });
+
+        heartsLayerEl.appendChild(heart);
+    }
+
+    trimHeartNodes();
 };
 
 const applyInitState = (state) => {
     renderChat(state.chat || []);
-    renderLikes(state.topLikes || []);
-    renderFollowers(state.followerGoal || followerState);
-
-    if (state.lastGift) {
-        showGift(state.lastGift);
-    }
-
-    const status = state.liveStatus || { connected: false };
-    setConnectionStatus(status.connected, status.connected ? `LIVE room ${status.roomId || ''}`.trim() : 'Esperando LIVE...');
 };
 
 const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
 const ws = new WebSocket(`${protocol}://${window.location.host}`);
-
-ws.addEventListener('open', () => {
-    setConnectionStatus(false, 'Overlay conectado. Esperando LIVE...');
-});
-
-ws.addEventListener('close', () => {
-    setConnectionStatus(false, 'Sin conexion al servidor');
-});
 
 ws.addEventListener('message', (event) => {
     let message;
@@ -258,20 +225,9 @@ ws.addEventListener('message', (event) => {
     case 'chat':
         renderChat(message.payload || []);
         break;
-    case 'likes':
-        renderLikes(message.payload || []);
+    case 'likeBurst':
+        spawnLikeHearts(message.payload || {});
         break;
-    case 'followGoal':
-        renderFollowers(message.payload || followerState);
-        break;
-    case 'gift':
-        if (message.payload) showGift(message.payload);
-        break;
-    case 'liveStatus': {
-        const status = message.payload || {};
-        setConnectionStatus(status.connected, status.connected ? `LIVE room ${status.roomId || ''}`.trim() : 'LIVE desconectado');
-        break;
-    }
     case 'tts':
         enqueueTTS(message.payload?.text || '');
         break;
@@ -286,5 +242,3 @@ if ('speechSynthesis' in window) {
 }
 
 renderChat([]);
-renderLikes([]);
-renderFollowers(followerState);

@@ -21,6 +21,7 @@ const youtubeLiveVideoId = process.env.YOUTUBE_LIVE_VIDEO_ID || '';
 const youtubeChannelId = process.env.YOUTUBE_CHANNEL_ID || '';
 const youtubeChannelHandle = process.env.YOUTUBE_CHANNEL_HANDLE || '';
 const youtubePollMinMs = Number(process.env.YOUTUBE_POLL_MIN_MS || 1500);
+const youtubeLikesPollMinMs = Number(process.env.YOUTUBE_LIKES_POLL_MIN_MS || 9000);
 
 const likeTotals = new Map();
 
@@ -193,7 +194,7 @@ const broadcast = (message) => {
 
 const pushChatToOverlay = (entry) => {
     overlayState.chat.unshift(entry);
-    overlayState.chat = overlayState.chat.slice(0, 4);
+    overlayState.chat = overlayState.chat.slice(0, 12);
     broadcast({ type: 'chat', payload: overlayState.chat });
 };
 
@@ -247,11 +248,43 @@ const handleGiftEvent = (username, giftName, repeatCount = 1) => {
     broadcast({ type: 'gift', payload: overlayState.lastGift });
 };
 
-const handleLikeEvent = (username, likeCount) => {
+const pickAvatarUrl = (avatarCandidate) => {
+    if (!avatarCandidate) return '';
+    if (typeof avatarCandidate === 'string') return avatarCandidate;
+    if (Array.isArray(avatarCandidate)) {
+        const firstString = avatarCandidate.find((item) => typeof item === 'string');
+        return firstString || '';
+    }
+    if (typeof avatarCandidate === 'object') {
+        const values = Object.values(avatarCandidate);
+        const firstString = values.find((item) => typeof item === 'string');
+        if (firstString) return firstString;
+    }
+    return '';
+};
+
+const emitLikeBurst = (payload) => {
+    broadcast({ type: 'likeBurst', payload: {
+        uniqueId: payload.uniqueId || 'viewer',
+        count: Number(payload.count || 1),
+        source: payload.source || 'tiktok',
+        avatarUrl: payload.avatarUrl || '',
+        createdAt: Date.now()
+    } });
+};
+
+const handleLikeEvent = (username, likeCount, sourceName = 'tiktok', avatarCandidate = '') => {
     const user = cleanUsername(username || 'viewer') || 'viewer';
     const count = Number(likeCount || 0);
     likeTotals.set(user, (likeTotals.get(user) || 0) + (count > 0 ? count : 1));
     updateTopLikes();
+
+    emitLikeBurst({
+        uniqueId: user,
+        count: count > 0 ? count : 1,
+        source: sourceName,
+        avatarUrl: pickAvatarUrl(avatarCandidate)
+    });
 };
 
 const handleFollowEvent = (username) => {
@@ -290,7 +323,7 @@ const startTikTokSource = async () => {
     });
 
     connection.on('like', (data) => {
-        handleLikeEvent(data.uniqueId, data.likeCount);
+        handleLikeEvent(data.uniqueId, data.likeCount, 'tiktok', data.profilePictureUrl || data.profilePictureUrls);
     });
 
     connection.on('follow', (data) => {
@@ -399,6 +432,17 @@ const getActiveLiveChatId = async (videoId) => {
     };
 };
 
+const getYouTubeVideoLikeCount = async (videoId) => {
+    const payload = await youtubeFetchJson('videos', {
+        part: 'statistics',
+        id: videoId
+    });
+
+    const rawCount = payload.items?.[0]?.statistics?.likeCount;
+    const count = Number(rawCount || 0);
+    return Number.isFinite(count) ? count : 0;
+};
+
 const superChatLabel = (amountText, currency) => {
     const amount = cleanMessage(amountText || '').trim();
     if (amount) return `SuperChat ${amount}`;
@@ -414,6 +458,8 @@ const startYouTubeSource = async () => {
     let videoId = youtubeLiveVideoId || parseYouTubeVideoIdFromUrl(youtubeLiveUrl);
     let liveChatId = '';
     let pageToken = '';
+    let lastYouTubeLikeCount = null;
+    let nextYouTubeLikesPollAt = 0;
 
     const ensureLiveChat = async () => {
         if (!videoId) {
@@ -478,6 +524,15 @@ const startYouTubeSource = async () => {
                     }
                 }
 
+                if (Date.now() >= nextYouTubeLikesPollAt) {
+                    const currentLikeCount = await getYouTubeVideoLikeCount(videoId);
+                    if (lastYouTubeLikeCount !== null && currentLikeCount > lastYouTubeLikeCount) {
+                        handleLikeEvent('YouTube', currentLikeCount - lastYouTubeLikeCount, 'youtube', '');
+                    }
+                    lastYouTubeLikeCount = currentLikeCount;
+                    nextYouTubeLikesPollAt = Date.now() + youtubeLikesPollMinMs;
+                }
+
                 const apiMs = Number(payload.pollingIntervalMillis || 2000);
                 await sleep(Math.max(youtubePollMinMs, apiMs));
             } catch (error) {
@@ -490,6 +545,8 @@ const startYouTubeSource = async () => {
                 }
                 liveChatId = '';
                 pageToken = '';
+                lastYouTubeLikeCount = null;
+                nextYouTubeLikesPollAt = 0;
             }
         }
     };

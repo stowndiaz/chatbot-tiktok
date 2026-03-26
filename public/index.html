@@ -19,43 +19,19 @@
             <ul id="chatList" class="chat-list"></ul>
         </section>
 
-        <section class="panel panel-likes">
+        <section class="panel panel-like-visualizer">
             <header class="panel-title">
                 <span class="material-symbols-rounded">favorite</span>
-                <span>Top Likes</span>
+                <span>Visualizador de Likes</span>
             </header>
-            <ol id="likesList" class="likes-list"></ol>
-        </section>
-
-        <section class="panel panel-followers">
-            <header class="panel-title">
-                <span class="material-symbols-rounded">speed</span>
-                <span>Followers Goal</span>
-            </header>
-            <div class="tach-wrap">
-                <div class="tach-arc">
-                    <div id="tachNeedle" class="tach-needle"></div>
+            <div id="heartsLayer" class="hearts-layer">
+                <div class="lane lane-youtube">
+                    <div class="lane-label">YouTube</div>
                 </div>
-                <div id="tachLeds" class="tach-leds"></div>
+                <div class="lane lane-tiktok">
+                    <div class="lane-label">TikTok</div>
+                </div>
             </div>
-            <div class="goal-numbers">
-                <span id="followersCurrent">0</span>
-                <span class="sep">/</span>
-                <span id="followersTarget">100</span>
-            </div>
-        </section>
-
-        <section id="giftToast" class="gift-toast hidden">
-            <div class="gift-icon material-symbols-rounded">redeem</div>
-            <div class="gift-text">
-                <div class="gift-title">Nuevo regalo</div>
-                <div id="giftMessage"></div>
-            </div>
-        </section>
-
-        <section class="panel panel-status">
-            <span id="connectionDot" class="status-dot"></span>
-            <span id="connectionText">Esperando conexión...</span>
         </section>
     </main>
     <script src="/app.js"></script>
