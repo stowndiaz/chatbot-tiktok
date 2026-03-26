@@ -35,7 +35,7 @@ body {
     height: 100vh;
     overflow: hidden;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) minmax(0, 0.82fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 
 .panel {
@@ -58,6 +58,7 @@ body {
 }
 
 .panel-chat {
+    grid-row: 1;
     min-height: 0;
     padding: 12px 14px;
     margin: 0;
@@ -108,6 +109,7 @@ body {
 }
 
 .panel-like-visualizer {
+    grid-row: 3;
     min-height: 0;
     padding: 0;
     margin: 0;
