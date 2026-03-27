@@ -1,12 +1,11 @@
 :root {
     --bg: transparent;
-    --panel: rgba(11, 16, 19, 0.56);
-    --panel-border: rgba(164, 187, 198, 0.24);
-    --panel-glow: rgba(116, 255, 177, 0.16);
-    --text-main: #eaf9f5;
-    --accent: #74ffb1;
-    --yt-heart: #ff2b2b;
-    --tt-heart: #ff76b7;
+    --panel: rgba(9, 16, 24, 0.58);
+    --panel-border: rgba(180, 221, 255, 0.24);
+    --text-main: #eff8ff;
+    --accent: #7fd4ff;
+    --heart: rgba(255, 103, 156, 0.42);
+    --event-color: rgba(127, 212, 255, 0.16);
 }
 
 * {
@@ -20,151 +19,160 @@ body {
     margin: 0;
     background: var(--bg);
     color: var(--text-main);
-    font-family: "Datatype", "Rajdhani", sans-serif;
+    font-family: "Outfit", sans-serif;
     overflow: hidden;
 }
 
 .material-symbols-rounded {
-    font-size: 19px;
+    font-size: 18px;
     line-height: 1;
 }
 
-.overlay {
+.widget {
     position: relative;
     width: 100vw;
     height: 100vh;
+    padding: 14px;
     overflow: hidden;
-    display: grid;
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.panel {
+.chat-panel {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    border-radius: 18px;
     border: 1px solid var(--panel-border);
-    background: linear-gradient(140deg, rgba(22, 29, 34, 0.74), var(--panel));
-    backdrop-filter: blur(7px);
-    border-radius: 16px;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 26px var(--panel-glow);
+    background: linear-gradient(160deg, rgba(22, 30, 39, 0.85), var(--panel));
+    backdrop-filter: blur(6px);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    padding: 14px;
+    gap: 10px;
+    transition: background 280ms ease, border-color 280ms ease, box-shadow 280ms ease;
 }
 
-.panel-title {
+.widget.event-active .chat-panel {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: linear-gradient(160deg, color-mix(in srgb, var(--event-color) 70%, rgba(12, 21, 32, 0.9)), rgba(11, 18, 27, 0.9));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 24px rgba(0, 0, 0, 0.28);
+}
+
+.progress-header {
+    display: grid;
+    gap: 8px;
+}
+
+.progress-title-row {
     display: flex;
     align-items: center;
     gap: 6px;
     color: var(--accent);
-    letter-spacing: 0.06em;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
     font-size: 13px;
-    margin: 0 0 10px;
+    font-weight: 700;
 }
 
-.panel-chat {
-    grid-row: 1;
-    min-height: 0;
-    padding: 12px 14px;
+.progress-meta {
+    font-size: 14px;
+    color: rgba(239, 248, 255, 0.82);
+}
+
+.progress-track {
+    width: 100%;
+    height: 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+}
+
+.progress-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #53c9ff, #8ce2ff);
+    box-shadow: 0 0 18px rgba(83, 201, 255, 0.5);
+    transition: width 240ms ease;
+}
+
+.special-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 11px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    animation: eventPulse 460ms ease both;
+}
+
+.special-notice p {
     margin: 0;
+    font-size: 20px;
+    line-height: 1.15;
+    font-weight: 600;
 }
 
 .chat-list {
     margin: 0;
     padding: 0;
     list-style: none;
-    display: grid;
-    gap: 9px;
     overflow: hidden;
+    display: grid;
+    align-content: start;
+    gap: 8px;
 }
 
 .chat-list li {
-    display: grid;
-    grid-template-columns: 120px 1fr;
-    gap: 8px;
-    font-size: 22px;
-    line-height: 1.22;
-    opacity: 0.86;
-    transform: translateY(0);
-    transition: opacity 260ms ease, transform 260ms ease;
+    font-size: 26px;
+    line-height: 1.15;
+    color: rgba(239, 248, 255, 0.94);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.9;
 }
 
 .chat-list li.chat-new {
-    animation: chatEntry 420ms cubic-bezier(0.2, 0.88, 0.3, 1) both;
+    animation: chatEntry 300ms ease both;
 }
 
 .chat-list li.chat-shift {
-    opacity: 0.7;
+    opacity: 0.72;
 }
 
 .chat-user {
     color: var(--accent);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.chat-message {
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.panel-like-visualizer {
-    grid-row: 3;
-    min-height: 0;
-    padding: 0;
-    margin: 0;
+    font-weight: 700;
+    margin-right: 8px;
 }
 
 .hearts-layer {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    background: transparent;
-}
-
-.lane {
     position: absolute;
     inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    overflow: hidden;
 }
 
 .heart-burst {
     position: absolute;
     left: 50%;
-    bottom: -42px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    bottom: -34px;
     transform: translateX(-50%);
+    color: var(--heart);
+    font-size: 56px;
+    line-height: 1;
+    filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.28));
     animation-name: riseFade;
     animation-timing-function: ease-out;
     animation-fill-mode: forwards;
-    pointer-events: none;
-    filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.4));
 }
 
 .heart-burst::before {
     content: "\2665";
-    font-size: inherit;
-    line-height: 1;
-}
-
-.heart-burst.tiktok {
-    color: var(--tt-heart);
-}
-
-.heart-burst.youtube {
-    color: var(--yt-heart);
-}
-
-.heart-avatar {
-    position: absolute;
-    width: 40%;
-    height: 40%;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, 0.9);
-    background: rgba(0, 0, 0, 0.22);
 }
 
 @keyframes riseFade {
@@ -174,27 +182,54 @@ body {
     }
 
     12% {
-        opacity: 1;
-    }
-
-    85% {
-        opacity: 0.9;
+        opacity: 0.72;
     }
 
     100% {
         opacity: 0;
-        transform: translateX(calc(-50% + var(--drift, 0px))) translateY(calc(-1 * var(--travel, 640px))) scale(1.08);
+        transform: translateX(calc(-50% + var(--drift, 0px))) translateY(calc(-1 * var(--travel, 640px))) scale(1.06);
     }
 }
 
 @keyframes chatEntry {
     0% {
         opacity: 0;
-        transform: translateY(18px);
+        transform: translateY(12px);
+    }
+
+    100% {
+        opacity: 0.9;
+        transform: translateY(0);
+    }
+}
+
+@keyframes eventPulse {
+    0% {
+        opacity: 0;
+        transform: scale(0.96);
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0);
+        transform: scale(1);
     }
 }
+
+@media (max-width: 768px) {
+    .widget {
+        padding: 8px;
+    }
+
+    .chat-panel {
+        padding: 10px;
+    }
+
+    .special-notice p {
+        font-size: 16px;
+    }
+
+    .chat-list li {
+        font-size: 20px;
+    }
+}
+

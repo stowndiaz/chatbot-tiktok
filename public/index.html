@@ -3,29 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Telemetry Overlay</title>
+    <title>TikTok Chat Overlay</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Datatype:wght@400;500;700&family=Rajdhani:wght@500;600;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,600,1,0" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,600,1,0" rel="stylesheet">
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <main class="overlay">
-        <section class="panel panel-chat">
-            <header class="panel-title">
-                <span class="material-symbols-rounded">chat</span>
-                <span>Live Chat</span>
+    <main id="widget" class="widget">
+        <div id="heartsLayer" class="hearts-layer" aria-hidden="true"></div>
+
+        <section class="chat-panel">
+            <header class="progress-header">
+                <div class="progress-title-row">
+                    <span class="material-symbols-rounded">favorite</span>
+                    <span class="progress-title">Likes para una carrera mas</span>
+                </div>
+                <div id="progressMeta" class="progress-meta">0 / 5000</div>
+                <div class="progress-track">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
             </header>
+
+            <div id="specialNotice" class="special-notice" hidden>
+                <span class="material-symbols-rounded">celebration</span>
+                <p id="specialNoticeText"></p>
+            </div>
+
             <ul id="chatList" class="chat-list"></ul>
         </section>
-
-        <section class="panel-like-visualizer">
-            <div id="heartsLayer" class="hearts-layer">
-                <div class="lane lane-youtube"></div>
-                <div class="lane lane-tiktok"></div>
-            </div>
-        </section>
     </main>
+
     <script src="/app.js"></script>
 </body>
 </html>
+

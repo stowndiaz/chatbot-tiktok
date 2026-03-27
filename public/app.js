@@ -1,16 +1,27 @@
+const widgetEl = document.getElementById('widget');
 const chatListEl = document.getElementById('chatList');
 const heartsLayerEl = document.getElementById('heartsLayer');
+const progressFillEl = document.getElementById('progressFill');
+const progressMetaEl = document.getElementById('progressMeta');
+const specialNoticeEl = document.getElementById('specialNotice');
+const specialNoticeTextEl = document.getElementById('specialNoticeText');
 
 const ttsQueue = [];
+const specialQueue = [];
+
 let ttsVoice = null;
 let ttsReady = false;
 let ttsSpeaking = false;
+let specialActive = false;
 let lastTopChatKey = '';
 
 const MAX_HEARTS_ON_SCREEN = 140;
+const SPECIAL_DURATION_MS = 3200;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 const getChatKey = (item = {}) => `${item.uniqueId || ''}|${item.comment || ''}|${item.createdAt || ''}`;
+
+const formatNumber = (value) => new Intl.NumberFormat('es-MX').format(Number(value || 0));
 
 const loadVoices = () => {
     if (!('speechSynthesis' in window)) return;
@@ -146,16 +157,18 @@ const renderChat = (messages = []) => {
 
     while (chatListEl.children.length < 12) {
         const li = document.createElement('li');
-        const user = document.createElement('span');
-        user.className = 'chat-user';
-        user.textContent = '---';
-        const message = document.createElement('span');
-        message.className = 'chat-message';
-        message.textContent = '';
-        li.appendChild(user);
-        li.appendChild(message);
+        li.textContent = '';
         chatListEl.appendChild(li);
     }
+};
+
+const updateLikeProgress = (payload = {}) => {
+    const current = Number(payload.current || 0);
+    const target = Math.max(Number(payload.target || 5000), 1);
+    const pct = clamp((current / target) * 100, 0, 100);
+
+    progressFillEl.style.width = `${pct}%`;
+    progressMetaEl.textContent = `${formatNumber(current)} / ${formatNumber(target)}`;
 };
 
 const trimHeartNodes = () => {
@@ -169,41 +182,24 @@ const trimHeartNodes = () => {
 };
 
 const spawnLikeHearts = (burst = {}) => {
-    const source = burst.source === 'youtube' ? 'youtube' : 'tiktok';
     const total = clamp(Number(burst.count || 1), 1, 80);
-    const travelMin = source === 'youtube' ? 700 : 540;
-    const travelMax = source === 'youtube' ? 1020 : 800;
-    const heartSize = source === 'youtube' ? 120 : 76;
-    const durationMin = source === 'youtube' ? 2400 : 1700;
-    const durationMax = source === 'youtube' ? 3400 : 2500;
-    const lane = source === 'youtube' ? 0.35 : 0.68;
 
     for (let i = 0; i < total; i += 1) {
         const heart = document.createElement('span');
-        heart.className = `heart-burst ${source}`;
+        heart.className = 'heart-burst';
 
-        const drift = (Math.random() - 0.5) * 260;
-        const spread = (Math.random() - 0.5) * 160;
-        const x = `${(lane * 100) + spread / 10}%`;
-        const travel = Math.round(travelMin + (Math.random() * (travelMax - travelMin)));
-        const duration = Math.round(durationMin + (Math.random() * (durationMax - durationMin)));
-        const delay = i * (source === 'youtube' ? 55 : 40);
+        const drift = (Math.random() - 0.5) * 280;
+        const x = `${Math.round(30 + (Math.random() * 40))}%`;
+        const travel = Math.round(500 + (Math.random() * 360));
+        const duration = Math.round(1450 + (Math.random() * 1100));
+        const delay = i * 34;
 
         heart.style.left = x;
-        heart.style.fontSize = `${Math.round(heartSize + ((Math.random() - 0.5) * 16))}px`;
+        heart.style.fontSize = `${Math.round(44 + (Math.random() * 40))}px`;
         heart.style.setProperty('--travel', `${travel}px`);
         heart.style.setProperty('--drift', `${drift}px`);
         heart.style.animationDuration = `${duration}ms`;
         heart.style.animationDelay = `${delay}ms`;
-
-        if (i === 0 && burst.avatarUrl) {
-            const avatar = document.createElement('img');
-            avatar.className = 'heart-avatar';
-            avatar.src = burst.avatarUrl;
-            avatar.alt = burst.uniqueId || source;
-            avatar.loading = 'lazy';
-            heart.appendChild(avatar);
-        }
 
         heart.addEventListener('animationend', () => {
             heart.remove();
@@ -215,8 +211,47 @@ const spawnLikeHearts = (burst = {}) => {
     trimHeartNodes();
 };
 
+const processSpecialQueue = async () => {
+    if (specialActive || !specialQueue.length) return;
+
+    specialActive = true;
+    const event = specialQueue.shift();
+
+    specialNoticeTextEl.textContent = event.message || 'Evento especial';
+    specialNoticeEl.hidden = false;
+
+    if (event.color) {
+        widgetEl.style.setProperty('--event-color', event.color);
+    }
+
+    widgetEl.classList.add('event-active');
+    chatListEl.style.opacity = '0.2';
+
+    await sleep(SPECIAL_DURATION_MS);
+
+    specialNoticeEl.hidden = true;
+    widgetEl.classList.remove('event-active');
+    chatListEl.style.opacity = '';
+
+    specialActive = false;
+
+    if (specialQueue.length) {
+        processSpecialQueue();
+    }
+};
+
+const enqueueSpecialEvent = (event = {}) => {
+    if (!event.message) return;
+    specialQueue.push(event);
+    if (specialQueue.length > 8) {
+        specialQueue.shift();
+    }
+    processSpecialQueue();
+};
+
 const applyInitState = (state) => {
     renderChat(state.chat || []);
+    updateLikeProgress(state.likeProgress || {});
 };
 
 const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
@@ -240,6 +275,12 @@ ws.addEventListener('message', (event) => {
     case 'likeBurst':
         spawnLikeHearts(message.payload || {});
         break;
+    case 'likeProgress':
+        updateLikeProgress(message.payload || {});
+        break;
+    case 'specialEvent':
+        enqueueSpecialEvent(message.payload || {});
+        break;
     case 'tts':
         enqueueTTS(message.payload?.text || '');
         break;
@@ -254,3 +295,5 @@ if ('speechSynthesis' in window) {
 }
 
 renderChat([]);
+updateLikeProgress({ current: 0, target: 5000 });
+

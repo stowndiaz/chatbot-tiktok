@@ -9,8 +9,8 @@ const source = (process.env.SOURCE || 'tiktok').toLowerCase();
 const tiktokUsername = process.env.TIKTOK_USERNAME || 'multi_twentyone';
 const overlayPort = Number(process.env.PORT || process.env.OVERLAY_PORT || 3000);
 const overlayHost = process.env.OVERLAY_HOST || '0.0.0.0';
-const followerGoalStart = Number(process.env.FOLLOWER_GOAL_START || 0);
-const followerGoalTarget = Number(process.env.FOLLOWER_GOAL_TARGET || 100);
+const likeGoalStart = Math.max(Number(process.env.LIKE_GOAL_START || 5000), 1);
+const likeGoalIncreaseMultiplier = Math.max(Number(process.env.LIKE_GOAL_MULTIPLIER || 1.5), 1.01);
 const publicDir = path.join(__dirname, 'public');
 const speechKey = process.env.SPEECH_KEY || process.env.AZURE_SPEECH_KEY || '';
 const speechRegion = process.env.SPEECH_REGION || process.env.AZURE_SPEECH_REGION || '';
@@ -23,17 +23,13 @@ const youtubeChannelHandle = process.env.YOUTUBE_CHANNEL_HANDLE || '';
 const youtubePollMinMs = Number(process.env.YOUTUBE_POLL_MIN_MS || 1500);
 const youtubeLikesPollMinMs = Number(process.env.YOUTUBE_LIKES_POLL_MIN_MS || 9000);
 
-const likeTotals = new Map();
-
 const overlayState = {
     chat: [],
-    topLikes: [],
-    followerGoal: {
-        start: followerGoalStart,
-        current: followerGoalStart,
-        target: followerGoalTarget
+    likeProgress: {
+        current: 0,
+        target: likeGoalStart,
+        completedCycles: 0
     },
-    lastGift: null,
     liveStatus: {
         connected: false,
         roomId: null
@@ -198,13 +194,23 @@ const pushChatToOverlay = (entry) => {
     broadcast({ type: 'chat', payload: overlayState.chat });
 };
 
-const updateTopLikes = () => {
-    overlayState.topLikes = Array.from(likeTotals.entries())
-        .map(([uniqueId, likes]) => ({ uniqueId, likes }))
-        .sort((a, b) => b.likes - a.likes)
-        .slice(0, 5);
+const emitLikeProgress = () => {
+    broadcast({ type: 'likeProgress', payload: overlayState.likeProgress });
+};
 
-    broadcast({ type: 'likes', payload: overlayState.topLikes });
+const advanceLikeProgress = (likeAmount) => {
+    const amount = Number(likeAmount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+
+    overlayState.likeProgress.current += amount;
+
+    while (overlayState.likeProgress.current >= overlayState.likeProgress.target) {
+        overlayState.likeProgress.current -= overlayState.likeProgress.target;
+        overlayState.likeProgress.completedCycles += 1;
+        overlayState.likeProgress.target = Math.ceil(overlayState.likeProgress.target * likeGoalIncreaseMultiplier);
+    }
+
+    emitLikeProgress();
 };
 
 const setLiveStatus = (connected, roomId) => {
@@ -237,60 +243,42 @@ const handleChatEvent = (username, comment) => {
     });
 };
 
-const handleGiftEvent = (username, giftName, repeatCount = 1) => {
-    overlayState.lastGift = {
-        uniqueId: cleanUsername(username || 'viewer') || 'viewer',
-        giftName: cleanMessage(giftName || 'Gift'),
-        repeatCount: Number(repeatCount || 1),
-        createdAt: Date.now()
-    };
-
-    broadcast({ type: 'gift', payload: overlayState.lastGift });
+const emitSpecialEvent = (message, color = 'rgba(255, 183, 77, 0.2)') => {
+    const cleanText = cleanMessage(message || '').slice(0, 180);
+    if (!cleanText) return;
+    broadcast({
+        type: 'specialEvent',
+        payload: {
+            message: cleanText,
+            color,
+            createdAt: Date.now()
+        }
+    });
 };
 
-const pickAvatarUrl = (avatarCandidate) => {
-    if (!avatarCandidate) return '';
-    if (typeof avatarCandidate === 'string') return avatarCandidate;
-    if (Array.isArray(avatarCandidate)) {
-        const firstString = avatarCandidate.find((item) => typeof item === 'string');
-        return firstString || '';
-    }
-    if (typeof avatarCandidate === 'object') {
-        const values = Object.values(avatarCandidate);
-        const firstString = values.find((item) => typeof item === 'string');
-        if (firstString) return firstString;
-    }
-    return '';
+const handleGiftEvent = (username, giftName, repeatCount = 1) => {
+    const cleanUser = cleanUsername(username || 'viewer') || 'viewer';
+    const cleanGift = cleanMessage(giftName || 'Regalo');
+    const count = Math.max(Number(repeatCount || 1), 1);
+    const label = `${cleanUser} envio ${cleanGift}${count > 1 ? ` x${count}` : ''}`;
+    emitSpecialEvent(label, 'rgba(255, 183, 77, 0.26)');
 };
 
 const emitLikeBurst = (payload) => {
     broadcast({ type: 'likeBurst', payload: {
-        uniqueId: payload.uniqueId || 'viewer',
         count: Number(payload.count || 1),
-        source: payload.source || 'tiktok',
-        avatarUrl: payload.avatarUrl || '',
         createdAt: Date.now()
     } });
 };
 
-const handleLikeEvent = (username, likeCount, sourceName = 'tiktok', avatarCandidate = '') => {
-    const user = cleanUsername(username || 'viewer') || 'viewer';
+const handleLikeEvent = (_username, likeCount) => {
     const count = Number(likeCount || 0);
-    likeTotals.set(user, (likeTotals.get(user) || 0) + (count > 0 ? count : 1));
-    updateTopLikes();
+    const safeCount = count > 0 ? count : 1;
 
     emitLikeBurst({
-        uniqueId: user,
-        count: count > 0 ? count : 1,
-        source: sourceName,
-        avatarUrl: pickAvatarUrl(avatarCandidate)
+        count: safeCount
     });
-};
-
-const handleFollowEvent = (username) => {
-    overlayState.followerGoal.current += 1;
-    broadcast({ type: 'followGoal', payload: overlayState.followerGoal });
-    console.log(`Nuevo follow: ${cleanUsername(username || 'viewer')}`);
+    advanceLikeProgress(safeCount);
 };
 
 wss.on('connection', (ws) => {
@@ -323,11 +311,17 @@ const startTikTokSource = async () => {
     });
 
     connection.on('like', (data) => {
-        handleLikeEvent(data.uniqueId, data.likeCount, 'tiktok', data.profilePictureUrl || data.profilePictureUrls);
+        handleLikeEvent(data.uniqueId, data.likeCount);
     });
 
     connection.on('follow', (data) => {
-        handleFollowEvent(data.uniqueId);
+        const cleanUser = cleanUsername(data.uniqueId || 'viewer') || 'viewer';
+        emitSpecialEvent(`${cleanUser} empezo a seguirte`, 'rgba(122, 215, 167, 0.24)');
+    });
+
+    connection.on('subscribe', (data) => {
+        const cleanUser = cleanUsername(data.uniqueId || 'viewer') || 'viewer';
+        emitSpecialEvent(`${cleanUser} activo una suscripcion`, 'rgba(182, 146, 255, 0.25)');
     });
 
     connection.on('error', (err) => {
@@ -527,7 +521,7 @@ const startYouTubeSource = async () => {
                 if (Date.now() >= nextYouTubeLikesPollAt) {
                     const currentLikeCount = await getYouTubeVideoLikeCount(videoId);
                     if (lastYouTubeLikeCount !== null && currentLikeCount > lastYouTubeLikeCount) {
-                        handleLikeEvent('YouTube', currentLikeCount - lastYouTubeLikeCount, 'youtube', '');
+                        handleLikeEvent('YouTube', currentLikeCount - lastYouTubeLikeCount);
                     }
                     lastYouTubeLikeCount = currentLikeCount;
                     nextYouTubeLikesPollAt = Date.now() + youtubeLikesPollMinMs;
